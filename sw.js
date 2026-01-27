@@ -114,8 +114,9 @@ self.addEventListener('fetch', (event) => {
       if (response) return response;
       
       const fetchPromise = fetch(event.request).then(response => {
-        // Sniff for M3U8 stream links
-        if (event.request.url.includes('.m3u8')) {
+        // Sniff for M3U8 stream links (more robust check)
+        const requestUrl = event.request.url.toLowerCase();
+        if (requestUrl.includes('.m3u8') && !requestUrl.includes('/segment') && !requestUrl.includes('.ts')) {
             console.log('Found M3U8 stream:', event.request.url);
             // Broadcast the find to the main PWA window
             self.clients.matchAll().then(clients => {
