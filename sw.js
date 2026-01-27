@@ -130,33 +130,40 @@ self.addEventListener('fetch', (event) => {
             broadcastStream(event.request.url);
         }
 
-        // 2. Inject "Peeker" script into HTML pages
+        // 2. Inject "Deep Peeker" script into HTML pages
         if (response.headers.get('content-type')?.includes('text/html')) {
             return response.text().then(html => {
                 const injectedHtml = html.replace('</head>', `
                     <script>
                         (function() {
-                            console.log("PWA Peeker Injected");
-                            function findStream() {
-                                // Check video tags
-                                document.querySelectorAll('video').forEach(v => {
-                                    if (v.src && v.src.includes('.m3u8')) report(v.src);
-                                    v.querySelectorAll('source').forEach(s => {
-                                        if (s.src && s.src.includes('.m3u8')) report(s.src);
-                                    });
-                                });
-                                // Check common HLS player globals
+                            const bc = window.BroadcastChannel ? new BroadcastChannel('stream_discovery') : null;
+                            function report(url) {
+                                if (!url || typeof url !== 'string' || !url.includes('.m3u8')) return;
+                                window.parent.postMessage({ type: 'STREAM_FOUND', url: url }, '*');
+                                if (bc) bc.postMessage({ type: 'STREAM_FOUND', url: url });
+                            }
+
+                            // 1. Hook XHR (Standard for HLS players)
+                            const oldOpen = XMLHttpRequest.prototype.open;
+                            XMLHttpRequest.prototype.open = function(method, url) {
+                                report(url);
+                                return oldOpen.apply(this, arguments);
+                            };
+
+                            // 2. Hook Fetch
+                            const oldFetch = window.fetch;
+                            window.fetch = function(input, init) {
+                                const url = (typeof input === 'string') ? input : input.url;
+                                report(url);
+                                return oldFetch.apply(this, arguments);
+                            };
+
+                            // 3. Scan DOM & Globals
+                            function scan() {
+                                document.querySelectorAll('video, source').forEach(el => report(el.src));
                                 if (window.hls && window.hls.url) report(window.hls.url);
                             }
-                            function report(url) {
-                                // Try multiple ways to report back to the PWA
-                                window.parent.postMessage({ type: 'STREAM_FOUND', url: url }, '*');
-                                if (window.BroadcastChannel) {
-                                    const bc = new BroadcastChannel('stream_discovery');
-                                    bc.postMessage({ type: 'STREAM_FOUND', url: url });
-                                }
-                            }
-                            setInterval(findStream, 2000);
+                            setInterval(scan, 2000);
                         })();
                     </script>
                 </head>`);
