@@ -87,12 +87,16 @@
         <button id="go-btn">Go</button>
     </header>
     <div class="container" id="player-container" style="background: #000; display: flex; align-items: center; justify-content: center;">
-        <video id="main-player" controls playsinline style="width: 100%; max-height: 100%; display: none;"></video>
-        <div id="player-placeholder" style="position: absolute; text-align: center; color: #666;">
-            <p id="status-text">Enter a site URL above to start</p>
+        <!-- Native Player (Hidden initially) -->
+        <video id="main-player" controls playsinline style="width: 100%; max-height: 100%; display: none; position: absolute; z-index: 10; background: black;"></video>
+        
+        <!-- Browse Mode Frame -->
+        <iframe id="sniffer-frame" style="width: 100%; height: 100%; border: none;" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
+
+        <!-- Status Overlay (Floating) -->
+        <div id="player-placeholder" style="position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.8); padding: 5px 10px; border-radius: 5px; color: #007aff; font-size: 12px; pointer-events: none; z-index: 20; display: none;">
+            <span id="status-text">Searching for stream...</span>
         </div>
-        <!-- Hidden iframe used to sniff for streams -->
-        <iframe id="sniffer-frame" style="width: 0; height: 0; border: none; visibility: hidden;" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
     </div>
 
     <script>
@@ -103,7 +107,7 @@
         const searchBar = document.getElementById('search-bar');
         const goBtn = document.getElementById('go-btn');
 
-        function startSniffing(url) {
+        function startBrowsing(url) {
             let target = url.trim();
             if (!target) return;
 
@@ -111,22 +115,30 @@
                 target = 'https://' + target;
             }
 
-            statusText.innerText = "Sniffing for stream links... Please wait.";
-            video.style.display = 'none';
             placeholder.style.display = 'block';
+            statusText.innerText = "Browse & click a game...";
+            video.style.display = 'none';
+            video.src = "";
             
-            // Load the site in the hidden frame
             snifferFrame.src = target;
         }
 
         function playStream(url) {
-            console.log("Playing stream:", url);
-            statusText.innerText = "Stream found! Loading...";
+            if (video.src === url) return; // Already playing
+            
+            console.log("Stream captured:", url);
+            statusText.innerText = "Stream Captured! Switching to Native Player...";
+            
             video.src = url;
             video.style.display = 'block';
-            placeholder.style.display = 'none';
+            
+            // Hide the status after a moment
+            setTimeout(() => {
+                placeholder.style.display = 'none';
+            }, 3000);
+
             video.play().catch(e => {
-                statusText.innerText = "Tap play to start video";
+                statusText.innerText = "Tap to Play Video";
                 placeholder.style.display = 'block';
             });
         }
@@ -138,9 +150,9 @@
             }
         });
 
-        goBtn.addEventListener('click', () => startSniffing(searchBar.value));
+        goBtn.addEventListener('click', () => startBrowsing(searchBar.value));
         searchBar.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') startSniffing(searchBar.value);
+            if (e.key === 'Enter') startBrowsing(searchBar.value);
         });
 
         // Register Service Worker for Adblocking & PWA
