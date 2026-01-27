@@ -86,40 +86,62 @@
         <input type="text" id="search-bar" placeholder="Search or enter URL (e.g. streamed.su)" value="https://streamed.su" inputmode="url" autocomplete="off" autocapitalize="none">
         <button id="go-btn">Go</button>
     </header>
-    <div class="container" style="background: #000; display: flex; align-items: center; justify-content: center;">
-        <video id="main-player" controls playsinline style="width: 100%; max-height: 100%;"></video>
+    <div class="container" id="player-container" style="background: #000; display: flex; align-items: center; justify-content: center;">
+        <video id="main-player" controls playsinline style="width: 100%; max-height: 100%; display: none;"></video>
         <div id="player-placeholder" style="position: absolute; text-align: center; color: #666;">
-            <p>Paste a stream URL (M3U8) above to play</p>
+            <p id="status-text">Enter a site URL above to start</p>
         </div>
+        <!-- Hidden iframe used to sniff for streams -->
+        <iframe id="sniffer-frame" style="width: 0; height: 0; border: none; visibility: hidden;" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
     </div>
 
     <script>
         const video = document.getElementById('main-player');
         const placeholder = document.getElementById('player-placeholder');
+        const statusText = document.getElementById('status-text');
+        const snifferFrame = document.getElementById('sniffer-frame');
         const searchBar = document.getElementById('search-bar');
         const goBtn = document.getElementById('go-btn');
 
-        function loadStream(url) {
+        function startSniffing(url) {
             let target = url.trim();
             if (!target) return;
 
-            if (target.endsWith('.m3u8') || target.includes('m3u8')) {
-                video.src = target;
-                video.style.display = 'block';
-                placeholder.style.display = 'none';
-                video.play();
-            } else {
-                alert('Please provide a direct .m3u8 stream link. Streamed.su provides these in their source or player.');
+            if (!target.startsWith('http')) {
+                target = 'https://' + target;
             }
+
+            statusText.innerText = "Sniffing for stream links... Please wait.";
+            video.style.display = 'none';
+            placeholder.style.display = 'block';
+            
+            // Load the site in the hidden frame
+            snifferFrame.src = target;
         }
 
-        goBtn.addEventListener('click', () => loadStream(searchBar.value));
-        searchBar.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') loadStream(searchBar.value);
+        function playStream(url) {
+            console.log("Playing stream:", url);
+            statusText.innerText = "Stream found! Loading...";
+            video.src = url;
+            video.style.display = 'block';
+            placeholder.style.display = 'none';
+            video.play().catch(e => {
+                statusText.innerText = "Tap play to start video";
+                placeholder.style.display = 'block';
+            });
+        }
+
+        // Listen for messages from the Service Worker
+        navigator.serviceWorker.addEventListener('message', (event) => {
+            if (event.data && event.data.type === 'STREAM_FOUND') {
+                playStream(event.data.url);
+            }
         });
 
-        // Initialize with default (cleared for custom player)
-        // loadUrl(searchBar.value);
+        goBtn.addEventListener('click', () => startSniffing(searchBar.value));
+        searchBar.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') startSniffing(searchBar.value);
+        });
 
         // Register Service Worker for Adblocking & PWA
         if ('serviceWorker' in navigator) {
