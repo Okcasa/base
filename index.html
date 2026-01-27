@@ -86,39 +86,40 @@
         <input type="text" id="search-bar" placeholder="Search or enter URL (e.g. streamed.su)" value="https://streamed.su" inputmode="url" autocomplete="off" autocapitalize="none">
         <button id="go-btn">Go</button>
     </header>
-    <div class="container">
-        <!-- Strictly sandboxed to prevent navigation/redirects away from the site -->
-        <iframe id="browser-frame" src="about:blank" sandbox="allow-forms allow-scripts allow-same-origin allow-presentation" allow="autoplay; fullscreen; picture-in-picture"></iframe>
+    <div class="container" style="background: #000; display: flex; align-items: center; justify-content: center;">
+        <video id="main-player" controls playsinline style="width: 100%; max-height: 100%;"></video>
+        <div id="player-placeholder" style="position: absolute; text-align: center; color: #666;">
+            <p>Paste a stream URL (M3U8) above to play</p>
+        </div>
     </div>
 
     <script>
-        const frame = document.getElementById('browser-frame');
+        const video = document.getElementById('main-player');
+        const placeholder = document.getElementById('player-placeholder');
         const searchBar = document.getElementById('search-bar');
         const goBtn = document.getElementById('go-btn');
 
-        function loadUrl(url) {
+        function loadStream(url) {
             let target = url.trim();
-            if (!target.startsWith('http')) {
-                if (target.includes('.') && !target.includes(' ')) {
-                    target = 'https://' + target;
-                } else {
-                    target = 'https://www.google.com/search?q=' + encodeURIComponent(target);
-                }
+            if (!target) return;
+
+            if (target.endsWith('.m3u8') || target.includes('m3u8')) {
+                video.src = target;
+                video.style.display = 'block';
+                placeholder.style.display = 'none';
+                video.play();
+            } else {
+                alert('Please provide a direct .m3u8 stream link. Streamed.su provides these in their source or player.');
             }
-            
-            // Check for frame blocking
-            // Note: We can't actually bypass X-Frame-Options headers easily without a server-side proxy
-            // But we can try to use a sandbox that at least blocks popups better.
-            frame.src = target;
         }
 
-        goBtn.addEventListener('click', () => loadUrl(searchBar.value));
+        goBtn.addEventListener('click', () => loadStream(searchBar.value));
         searchBar.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') loadUrl(searchBar.value);
+            if (e.key === 'Enter') loadStream(searchBar.value);
         });
 
-        // Initialize with default
-        loadUrl(searchBar.value);
+        // Initialize with default (cleared for custom player)
+        // loadUrl(searchBar.value);
 
         // Register Service Worker for Adblocking & PWA
         if ('serviceWorker' in navigator) {
