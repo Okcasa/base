@@ -114,36 +114,66 @@ self.addEventListener('fetch', (event) => {
       if (response) return response;
       
       const fetchPromise = fetch(event.request).then(response => {
-        // Sniff for M3U8 stream links (more robust check)
         const requestUrl = event.request.url.toLowerCase();
+
+        // 1. Sniff for M3U8 stream links in Network
         const isStream = requestUrl.includes('.m3u8') || 
                          response.headers.get('content-type')?.includes('application/vnd.apple.mpegurl') ||
                          response.headers.get('content-type')?.includes('application/x-mpegurl');
 
         if (isStream && !requestUrl.includes('/segment') && !requestUrl.includes('.ts')) {
-            console.log('Found M3U8 stream:', event.request.url);
-            // Broadcast the find to the main PWA window
-            self.clients.matchAll().then(clients => {
-                clients.forEach(client => {
-                    client.postMessage({
-                        type: 'STREAM_FOUND',
-                        url: event.request.url
-                    });
+            broadcastStream(event.request.url);
+        }
+
+        // 2. Inject "Peeker" script into HTML pages
+        if (response.headers.get('content-type')?.includes('text/html')) {
+            return response.text().then(html => {
+                const injectedHtml = html.replace('</head>', `
+                    <script>
+                        (function() {
+                            console.log("PWA Peeker Injected");
+                            function findStream() {
+                                // Check video tags
+                                document.querySelectorAll('video').forEach(v => {
+                                    if (v.src && v.src.includes('.m3u8')) report(v.src);
+                                    v.querySelectorAll('source').forEach(s => {
+                                        if (s.src && s.src.includes('.m3u8')) report(s.src);
+                                    });
+                                });
+                                // Check common HLS player globals
+                                if (window.hls && window.hls.url) report(window.hls.url);
+                            }
+                            function report(url) {
+                                window.parent.postMessage({ type: 'STREAM_FOUND', url: url }, '*');
+                            }
+                            setInterval(findStream, 2000);
+                        })();
+                    </script>
+                </head>`);
+                return new Response(injectedHtml, {
+                    headers: response.headers
                 });
             });
         }
 
-        // Simple logic: if a request is trying to redirect to a known ad-keyword domain, block it
+        // 3. Ad Blocking / Redirect Blocking
         if (response.redirected && BLOCK_LIST.some(domain => response.url.includes(domain))) {
-            console.log('Blocking redirected ad:', response.url);
             return new Response('', { status: 204 });
         }
         return response;
       }).catch(() => {
-        // Fallback or handle offline
+        // Fallback
       });
 
       return fetchPromise;
     })
   );
 });
+
+function broadcastStream(url) {
+    self.clients.matchAll().then(clients => {
+        clients.forEach(client => {
+            client.postMessage({ type: 'STREAM_FOUND', url: url });
+        });
+    });
+}
