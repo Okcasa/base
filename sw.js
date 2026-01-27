@@ -89,11 +89,16 @@ const BLOCK_LIST = [
 ];
 
 self.addEventListener('install', (event) => {
+  self.skipWaiting(); // Force activation on iOS
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(ASSETS);
     })
   );
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(clients.claim()); // Take control immediately
 });
 
 self.addEventListener('fetch', (event) => {
@@ -144,7 +149,12 @@ self.addEventListener('fetch', (event) => {
                                 if (window.hls && window.hls.url) report(window.hls.url);
                             }
                             function report(url) {
+                                // Try multiple ways to report back to the PWA
                                 window.parent.postMessage({ type: 'STREAM_FOUND', url: url }, '*');
+                                if (window.BroadcastChannel) {
+                                    const bc = new BroadcastChannel('stream_discovery');
+                                    bc.postMessage({ type: 'STREAM_FOUND', url: url });
+                                }
                             }
                             setInterval(findStream, 2000);
                         })();
