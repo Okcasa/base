@@ -164,7 +164,13 @@
             statusText.innerText = "Stream Ready";
         });
 
-        // Listen for messages from the Service Worker
+        // Listen for messages from BOTH the Service Worker and the Injected Script
+        window.addEventListener('message', (event) => {
+            if (event.data && event.data.type === 'STREAM_FOUND') {
+                onStreamCaptured(event.data.url);
+            }
+        });
+
         navigator.serviceWorker.addEventListener('message', (event) => {
             if (event.data && event.data.type === 'STREAM_FOUND') {
                 onStreamCaptured(event.data.url);
