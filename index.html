@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="StreamPlayer">
+    <link rel="apple-touch-icon" href="icon.png">
+    <link rel="manifest" href="manifest.json">
+    <title>Stream Player PWA</title>
+    <style>
+        :root {
+            --bg-color: #000000;
+            --text-color: #ffffff;
+            --accent-color: #007aff;
+            --safe-top: env(safe-area-inset-top);
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+        header {
+            padding-top: calc(var(--safe-top) + 10px);
+            padding-left: 15px;
+            padding-right: 15px;
+            padding-bottom: 10px;
+            background: #111;
+            display: flex;
+            gap: 10px;
+        }
+        #search-bar {
+            flex: 1;
+            padding: 10px;
+            border-radius: 8px;
+            border: none;
+            background: #222;
+            color: white;
+            font-size: 16px;
+            -webkit-appearance: none;
+        }
+        #go-btn {
+            padding: 10px 15px;
+            background: var(--accent-color);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-weight: bold;
+        }
+        .container {
+            flex: 1;
+            position: relative;
+        }
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: center;
+            pointer-events: none;
+        }
+        .btn {
+            pointer-events: auto;
+            background: rgba(0,0,0,0.6);
+            padding: 10px;
+            border-radius: 50%;
+            margin: 0 10px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <input type="text" id="search-bar" placeholder="Search or enter URL (e.g. streamed.su)" value="https://streamed.su" inputmode="url" autocomplete="off" autocapitalize="none">
+        <button id="go-btn">Go</button>
+    </header>
+    <div class="container">
+        <iframe id="browser-frame" src="about:blank"></iframe>
+    </div>
+
+    <script>
+        const frame = document.getElementById('browser-frame');
+        const searchBar = document.getElementById('search-bar');
+        const goBtn = document.getElementById('go-btn');
+
+        function loadUrl(url) {
+            let target = url.trim();
+            if (!target.startsWith('http')) {
+                if (target.includes('.') && !target.includes(' ')) {
+                    target = 'https://' + target;
+                } else {
+                    target = 'https://www.google.com/search?q=' + encodeURIComponent(target);
+                }
+            }
+            frame.src = target;
+        }
+
+        goBtn.addEventListener('click', () => loadUrl(searchBar.value));
+        searchBar.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') loadUrl(searchBar.value);
+        });
+
+        // Initialize with default
+        loadUrl(searchBar.value);
+
+        // Register Service Worker for Adblocking & PWA
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js').then(() => {
+                console.log('Service Worker Registered');
+            });
+        }
+    </script>
+</body>
+</html>
