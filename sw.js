@@ -111,7 +111,16 @@ self.addEventListener('fetch', (event) => {
   // Standard fetch for non-ad requests
   event.respondWith(
     caches.match(event.request).then((response) => {
-      return response || fetch(event.request).catch(() => {
+      if (response) return response;
+      
+      return fetch(event.request).then(response => {
+        // Simple logic: if a request is trying to redirect to a known ad-keyword domain, block it
+        if (response.redirected && BLOCK_LIST.some(domain => response.url.includes(domain))) {
+            console.log('Blocking redirected ad:', response.url);
+            return new Response('', { status: 204 });
+        }
+        return response;
+      }).catch(() => {
         // Fallback or handle offline
       });
     })
