@@ -87,7 +87,8 @@
         <button id="go-btn">Go</button>
     </header>
     <div class="container">
-        <iframe id="browser-frame" src="about:blank" sandbox="allow-forms allow-scripts allow-same-origin allow-presentation allow-popups-to-escape-sandbox" allow="autoplay; fullscreen; picture-in-picture"></iframe>
+        <!-- Strictly sandboxed to prevent navigation/redirects away from the site -->
+        <iframe id="browser-frame" src="about:blank" sandbox="allow-forms allow-scripts allow-same-origin allow-presentation" allow="autoplay; fullscreen; picture-in-picture"></iframe>
     </div>
 
     <script>
