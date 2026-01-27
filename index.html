@@ -87,7 +87,7 @@
         <button id="go-btn">Go</button>
     </header>
     <div class="container">
-        <iframe id="browser-frame" src="about:blank"></iframe>
+        <iframe id="browser-frame" src="about:blank" sandbox="allow-forms allow-scripts allow-same-origin allow-presentation allow-popups-to-escape-sandbox" allow="autoplay; fullscreen; picture-in-picture"></iframe>
     </div>
 
     <script>
@@ -104,6 +104,10 @@
                     target = 'https://www.google.com/search?q=' + encodeURIComponent(target);
                 }
             }
+            
+            // Check for frame blocking
+            // Note: We can't actually bypass X-Frame-Options headers easily without a server-side proxy
+            // But we can try to use a sandbox that at least blocks popups better.
             frame.src = target;
         }
 
