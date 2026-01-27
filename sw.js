@@ -113,7 +113,21 @@ self.addEventListener('fetch', (event) => {
     caches.match(event.request).then((response) => {
       if (response) return response;
       
-      return fetch(event.request).then(response => {
+      const fetchPromise = fetch(event.request).then(response => {
+        // Sniff for M3U8 stream links
+        if (event.request.url.includes('.m3u8')) {
+            console.log('Found M3U8 stream:', event.request.url);
+            // Broadcast the find to the main PWA window
+            self.clients.matchAll().then(clients => {
+                clients.forEach(client => {
+                    client.postMessage({
+                        type: 'STREAM_FOUND',
+                        url: event.request.url
+                    });
+                });
+            });
+        }
+
         // Simple logic: if a request is trying to redirect to a known ad-keyword domain, block it
         if (response.redirected && BLOCK_LIST.some(domain => response.url.includes(domain))) {
             console.log('Blocking redirected ad:', response.url);
@@ -123,6 +137,8 @@ self.addEventListener('fetch', (event) => {
       }).catch(() => {
         // Fallback or handle offline
       });
+
+      return fetchPromise;
     })
   );
 });
