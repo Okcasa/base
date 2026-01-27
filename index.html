@@ -177,6 +177,16 @@
             }
         });
 
+        // BroadcastChannel fallback for iOS Safari
+        if (window.BroadcastChannel) {
+            const bc = new BroadcastChannel('stream_discovery');
+            bc.onmessage = (event) => {
+                if (event.data && event.data.type === 'STREAM_FOUND') {
+                    onStreamCaptured(event.data.url);
+                }
+            };
+        }
+
         goBtn.addEventListener('click', () => startBrowsing(searchBar.value));
         searchBar.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') startBrowsing(searchBar.value);
