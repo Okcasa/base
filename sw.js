@@ -164,6 +164,12 @@ self.addEventListener('fetch', (event) => {
                                 if (window.hls && window.hls.url) report(window.hls.url);
                             }
                             setInterval(scan, 2000);
+
+                            // 4. Block Popups/Redirects via window.open
+                            window.open = function() {
+                                console.log("Blocked window.open attempt");
+                                return null;
+                            };
                         })();
                     </script>
                 </head>`);
