@@ -168,8 +168,26 @@ self.addEventListener('fetch', (event) => {
                             // 4. Block Popups/Redirects via window.open
                             window.open = function() {
                                 console.log("Blocked window.open attempt");
-                                return null;
+                                return {
+                                    focus: function() {},
+                                    close: function() {},
+                                    location: {}
+                                };
                             };
+
+                            // 5. Intercept window.onbeforeunload/onunload to prevent redirect loops
+                            window.onbeforeunload = null;
+                            window.onunload = null;
+
+                            // 6. Block location changes to different origins (experimental)
+                            const originalLocation = window.location.origin;
+                            setInterval(() => {
+                                if (window.location.origin !== originalLocation && originalLocation !== "null") {
+                                     // This is tricky because we might want some redirects
+                                     // But many ads use this. 
+                                     // For now, let's focus on window.open.
+                                }
+                            }, 1000);
                         })();
                     </script>
                 </head>`);
