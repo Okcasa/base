@@ -132,6 +132,11 @@ self.addEventListener('fetch', (event) => {
 
         // 2. Inject "Deep Peeker" script into HTML pages
         if (response.headers.get('content-type')?.includes('text/html')) {
+            const newHeaders = new Headers(response.headers);
+            // Fix "Black Screen" by removing frame restrictions
+            newHeaders.delete('X-Frame-Options');
+            newHeaders.delete('Content-Security-Policy');
+
             return response.text().then(html => {
                 const injectedHtml = html.replace('</head>', `
                     <script>
@@ -141,6 +146,10 @@ self.addEventListener('fetch', (event) => {
                                 if (!url || typeof url !== 'string' || !url.includes('.m3u8')) return;
                                 window.parent.postMessage({ type: 'STREAM_FOUND', url: url }, '*');
                                 if (bc) bc.postMessage({ type: 'STREAM_FOUND', url: url });
+                            }
+
+                            function registerSite(url) {
+                                window.parent.postMessage({ type: 'REGISTER_SITE', url: url }, '*');
                             }
 
                             // 1. Hook XHR (Standard for HLS players)
@@ -165,15 +174,29 @@ self.addEventListener('fetch', (event) => {
                             }
                             setInterval(scan, 2000);
 
-                            // 4. Block Popups/Redirects via window.open
-                            window.open = function() {
-                                console.log("Blocked window.open attempt");
+                            // 4. Block Popups/Redirects via window.open & Capture them
+                            window.open = function(url) {
+                                console.log("Blocked window.open attempt:", url);
+                                if (url && url.startsWith('http')) {
+                                    registerSite(url);
+                                }
                                 return {
                                     focus: function() {},
                                     close: function() {},
                                     location: {}
                                 };
                             };
+
+                            // 4b. Intercept Link Clicks that might be popups
+                            document.addEventListener('click', function(e) {
+                                const target = e.target.closest('a');
+                                if (target && target.target === '_blank') {
+                                    console.log("Intercepted _blank link click:", target.href);
+                                    registerSite(target.href);
+                                    // We don't necessarily want to block ALL user clicks, 
+                                    // but we definitely want to register them.
+                                }
+                            }, true);
 
                             // 5. Intercept window.onbeforeunload/onunload to prevent redirect loops
                             window.onbeforeunload = null;
@@ -192,7 +215,7 @@ self.addEventListener('fetch', (event) => {
                     </script>
                 </head>`);
                 return new Response(injectedHtml, {
-                    headers: response.headers
+                    headers: newHeaders
                 });
             });
         }
