@@ -131,11 +131,15 @@ self.addEventListener('fetch', (event) => {
         }
 
         // 2. Inject "Deep Peeker" script into HTML pages
-        if (response.headers.get('content-type')?.includes('text/html')) {
+        if (response.headers.get('content-type')?.includes('text/html') || requestUrl.includes('cineby.gd')) {
             const newHeaders = new Headers(response.headers);
             // Fix "Black Screen" by removing frame restrictions
             newHeaders.delete('X-Frame-Options');
             newHeaders.delete('Content-Security-Policy');
+            
+            // Also ensure COEP/COOP don't block us if they are present
+            newHeaders.delete('Cross-Origin-Embedder-Policy');
+            newHeaders.delete('Cross-Origin-Opener-Policy');
 
             return response.text().then(html => {
                 const injectedHtml = html.replace('</head>', `
