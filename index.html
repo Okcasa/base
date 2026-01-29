@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="StreamPlayer">
+    <meta name="apple-mobile-web-app-title" content="LinkCollector">
     <link rel="apple-touch-icon" href="icon.png">
     <link rel="manifest" href="manifest.json">
-    <title>Stream Player PWA</title>
+    <title>Link Collector</title>
     <style>
         :root {
             --bg-color: #000000;
@@ -35,6 +35,7 @@
             background: #111;
             display: flex;
             gap: 10px;
+            z-index: 10;
         }
         #search-bar {
             flex: 1;
@@ -83,246 +84,141 @@
             margin-bottom: 4px;
             font-weight: 500;
         }
-        .active-item:hover {
-            background: #333;
-        }
         .container {
             flex: 1;
             position: relative;
+            padding-bottom: 60px; /* Space for the nav */
         }
         iframe {
             width: 100%;
             height: 100%;
             border: none;
+            background: #000;
         }
-        #controls {
-            position: absolute;
-            bottom: 20px;
-            left: 0;
-            right: 0;
-            display: flex;
-            justify-content: center;
-            pointer-events: none;
-        }
-        .btn {
-            pointer-events: auto;
-            background: rgba(0,0,0,0.6);
-            padding: 10px;
-            border-radius: 50%;
-            margin: 0 10px;
+        #toggle-nav {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            z-index: 101;
+            background: rgba(0,0,0,0.5);
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 10px;
+            color: #aaa;
+            border: 1px solid #444;
         }
     </style>
 </head>
 <body>
     <header>
-        <input type="text" id="search-bar" placeholder="Search or enter URL" value="" inputmode="url" autocomplete="off" autocapitalize="none">
+        <input type="text" id="search-bar" placeholder="Enter URL (e.g. cineby.gd)" value="" inputmode="url" autocomplete="off" autocapitalize="none">
         <button id="go-btn">Go</button>
     </header>
-    <div class="container" id="player-container" style="background: #000; display: flex; align-items: center; justify-content: center; padding-bottom: 60px;">
-        <!-- Native Player (Hidden initially) -->
-        <video id="main-player" controls playsinline style="width: 100%; max-height: 100%; display: none; position: absolute; z-index: 10; background: black;"></video>
-        
-        <!-- Browse Mode Frame - Relaxed slightly to let their player load -->
-        <iframe id="sniffer-frame" style="width: 100%; height: 100%; border: none;" sandbox="allow-scripts allow-same-origin allow-forms allow-presentation allow-popups allow-modals allow-storage-access-by-user-activation allow-top-navigation-by-user-activation" referrerpolicy="no-referrer"></iframe>
 
-        <!-- Status & Control Overlay (Floating) -->
-        <div id="player-placeholder" style="position: absolute; bottom: 160px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.9); padding: 10px 20px; border-radius: 20px; color: #fff; font-size: 14px; z-index: 20; display: none; box-shadow: 0 4px 15px rgba(0,0,0,0.5); border: 1px solid #007aff; text-align: center;">
-            <div id="status-text" style="margin-bottom: 8px; color: #aaa;">Searching...</div>
-            <button id="switch-btn" style="background: #007aff; border: none; color: white; padding: 8px 15px; border-radius: 15px; font-weight: bold; display: none;">Open Native Player</button>
-            <button id="close-player-btn" style="background: #444; border: none; color: white; padding: 8px 15px; border-radius: 15px; font-weight: bold; display: none; margin-top: 10px;">Back to Site</button>
-        </div>
+    <div id="toggle-nav">Toggle Nav</div>
+
+    <div class="container">
+        <iframe id="browser-frame" sandbox="allow-scripts allow-same-origin allow-forms allow-presentation allow-popups allow-modals allow-storage-access-by-user-activation allow-top-navigation-by-user-activation" referrerpolicy="no-referrer"></iframe>
     </div>
+
     <div id="active-list">
-        <!-- Active sites will appear here -->
+        <!-- Buttons will appear here -->
     </div>
 
     <script>
-        const video = document.getElementById('main-player');
-        const placeholder = document.getElementById('player-placeholder');
-        const statusText = document.getElementById('status-text');
-        const switchBtn = document.getElementById('switch-btn');
-        const closePlayerBtn = document.getElementById('close-player-btn');
-        const snifferFrame = document.getElementById('sniffer-frame');
+        const browserFrame = document.getElementById('browser-frame');
         const searchBar = document.getElementById('search-bar');
         const goBtn = document.getElementById('go-btn');
         const activeList = document.getElementById('active-list');
+        const toggleNav = document.getElementById('toggle-nav');
 
-        let lastCapturedUrl = "";
-        let isListVisible = true;
+        let isNavVisible = true;
 
-        // Create Toggle for Active List
-        const toggleBtn = document.createElement('div');
-        toggleBtn.innerText = "Toggle Active List";
-        toggleBtn.style = "position: absolute; top: 10px; right: 10px; z-index: 100; background: rgba(0,0,0,0.5); padding: 5px; border-radius: 5px; cursor: pointer; font-size: 10px; color: #777;";
-        toggleBtn.onclick = () => {
-            isListVisible = !isListVisible;
-            activeList.style.display = isListVisible ? 'flex' : 'none';
+        toggleNav.onclick = () => {
+            isNavVisible = !isNavVisible;
+            activeList.style.display = isNavVisible ? 'flex' : 'none';
         };
-        document.body.appendChild(toggleBtn);
         
-        // IndexedDB setup for large storage
+        // IndexedDB setup
         let db;
-        const dbName = "StreamPlayerDB";
-        const request = indexedDB.open(dbName, 1);
+        const dbName = "LinkCollectorDB";
+        const dbRequest = indexedDB.open(dbName, 1);
 
-        request.onerror = (event) => console.error("DB Error:", event);
-        request.onupgradeneeded = (event) => {
-            db = event.target.result;
-            const objectStore = db.createObjectStore("sites", { keyPath: "url" });
-            objectStore.createIndex("timestamp", "timestamp", { unique: false });
+        dbRequest.onupgradeneeded = (e) => {
+            db = e.target.result;
+            const store = db.createObjectStore("sites", { keyPath: "url" });
+            store.createIndex("timestamp", "timestamp", { unique: false });
         };
-        request.onsuccess = (event) => {
-            db = event.target.result;
+        dbRequest.onsuccess = (e) => {
+            db = e.target.result;
             loadSites();
         };
 
         function loadSites() {
             if (!db) return;
             const transaction = db.transaction(["sites"], "readonly");
-            const objectStore = transaction.objectStore("sites");
-            const index = objectStore.index("timestamp");
+            const store = transaction.objectStore("sites");
+            const index = store.index("timestamp");
             const request = index.openCursor(null, "prev");
             
             activeList.innerHTML = '';
-            let count = 0;
             request.onsuccess = (event) => {
                 const cursor = event.target.result;
-                if (cursor && count < 1000) {
+                if (cursor) {
                     const site = cursor.value;
-                    const el = document.createElement('div');
-                    el.className = 'active-item';
-                    el.innerText = site.name;
-                    el.title = site.url;
-                    el.onclick = () => {
+                    const btn = document.createElement('button');
+                    btn.className = 'active-item';
+                    btn.innerText = site.name;
+                    btn.onclick = () => {
                         searchBar.value = site.url;
-                        startBrowsing(site.url);
+                        navigateTo(site.url);
                     };
-                    activeList.appendChild(el);
-                    count++;
+                    activeList.appendChild(btn);
                     cursor.continue();
                 }
             };
         }
 
         function registerSite(url) {
-            if (!db || !url || url === 'about:blank') return;
+            if (!db || !url || url === 'about:blank' || url.startsWith('javascript:')) return;
             try {
                 const urlObj = new URL(url);
-                // Filter out common ad/junk sites if needed, but for now we follow request
                 const name = urlObj.hostname.replace('www.', '');
                 const timestamp = Date.now();
                 
                 const transaction = db.transaction(["sites"], "readwrite");
-                const objectStore = transaction.objectStore("sites");
-                objectStore.put({ url, name, timestamp });
-                
+                const store = transaction.objectStore("sites");
+                store.put({ url, name, timestamp });
                 transaction.oncomplete = () => loadSites();
             } catch(e) {}
         }
 
-        function startBrowsing(url) {
+        function navigateTo(url) {
             let target = url.trim();
             if (!target) return;
-
-            if (!target.startsWith('http')) {
-                target = 'https://' + target;
-            }
-
+            if (!target.startsWith('http')) target = 'https://' + target;
+            
             registerSite(target);
-
-            // Hide list when browsing to give more space
+            browserFrame.src = target;
+            
+            // Auto-hide nav on navigation to give more space
             activeList.style.display = 'none';
-            isListVisible = false;
-
-            placeholder.style.display = 'block';
-            statusText.innerText = "Browse & click a game...";
-            switchBtn.style.display = 'none';
-            closePlayerBtn.style.display = 'none';
-            
-            video.style.display = 'none';
-            video.src = "";
-            
-        snifferFrame.src = target;
-        console.log("Navigating iframe to:", target);
-        
-        // Ensure the iframe is visible and has correct dimensions
-        snifferFrame.style.display = "block";
-        snifferFrame.style.width = "100%";
-        snifferFrame.style.height = "100%";
-        
-        // Mobile Safari / iOS Fix: Use a small timeout to ensure DOM update
-        setTimeout(() => {
-            snifferFrame.focus();
-        }, 100);
-    }
-
-        function onStreamCaptured(url) {
-            if (lastCapturedUrl === url) return;
-            
-            lastCapturedUrl = url;
-            console.log("Stream available:", url);
-            
-            statusText.innerText = "Stream Found!";
-            statusText.style.color = "#4cd964"; // Green
-            switchBtn.style.display = 'inline-block';
-            placeholder.style.display = 'block';
+            isNavVisible = false;
         }
 
-        switchBtn.addEventListener('click', () => {
-            if (!lastCapturedUrl) return;
-            
-            video.src = lastCapturedUrl;
-            video.style.display = 'block';
-            switchBtn.style.display = 'none';
-            closePlayerBtn.style.display = 'inline-block';
-            statusText.innerText = "Playing in Native Player";
-            
-            video.play();
-        });
+        goBtn.onclick = () => navigateTo(searchBar.value);
+        searchBar.onkeypress = (e) => { if (e.key === 'Enter') navigateTo(searchBar.value); };
 
-        closePlayerBtn.addEventListener('click', () => {
-            video.pause();
-            video.style.display = 'none';
-            closePlayerBtn.style.display = 'none';
-            switchBtn.style.display = 'inline-block';
-            statusText.innerText = "Stream Ready";
-        });
-
-        // Listen for messages from BOTH the Service Worker and the Injected Script
         window.addEventListener('message', (event) => {
-            if (event.data && event.data.type === 'STREAM_FOUND') {
-                onStreamCaptured(event.data.url);
-            }
             if (event.data && event.data.type === 'REGISTER_SITE') {
                 registerSite(event.data.url);
             }
         });
 
-        navigator.serviceWorker.addEventListener('message', (event) => {
-            if (event.data && event.data.type === 'STREAM_FOUND') {
-                onStreamCaptured(event.data.url);
-            }
-        });
-
-        // BroadcastChannel fallback for iOS Safari
-        if (window.BroadcastChannel) {
-            const bc = new BroadcastChannel('stream_discovery');
-            bc.onmessage = (event) => {
-                if (event.data && event.data.type === 'STREAM_FOUND') {
-                    onStreamCaptured(event.data.url);
-                }
-            };
-        }
-
-        goBtn.addEventListener('click', () => startBrowsing(searchBar.value));
-        searchBar.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') startBrowsing(searchBar.value);
-        });
-
-        // Register Service Worker for Adblocking & PWA
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('sw.js').then(() => {
-                console.log('Service Worker Registered');
+                console.log('Service Worker Active');
             });
         }
     </script>
