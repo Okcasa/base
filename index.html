@@ -213,7 +213,7 @@
             } catch(e) {}
         }
 
-        function navigateTo(url) {
+        async function navigateTo(url) {
             let target = url.trim();
             if (!target) return;
 
@@ -231,7 +231,31 @@
                 registerSite(target);
             }
 
-            browserFrame.src = target;
+            // Proxy logic for sites that usually block iframes
+            const problematic = ['flickystream.ru', 'cineby.gd', 'vidsrc', 'embed', 'player'];
+            const needsProxy = problematic.some(p => target.includes(p));
+
+            if (needsProxy && !target.includes('google.com')) {
+                console.log("Using proxy for:", target);
+                // We use a base64 encoded URL for the proxy to avoid issues
+                const proxyUrl = 'https://api.allorigins.win/get?url=' + encodeURIComponent(target);
+                try {
+                    const response = await fetch(proxyUrl);
+                    const data = await response.json();
+                    if (data.contents) {
+                        // Create a blob and load it to bypass frame blocks
+                        const blob = new Blob([data.contents], { type: 'text/html' });
+                        browserFrame.src = URL.createObjectURL(blob);
+                        fallbackBtn.style.display = 'none';
+                    } else {
+                        browserFrame.src = target;
+                    }
+                } catch (e) {
+                    browserFrame.src = target;
+                }
+            } else {
+                browserFrame.src = target;
+            }
             
             // Show fallback button after 3 seconds if it's not a Google search
             fallbackBtn.style.display = 'none';
