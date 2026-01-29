@@ -54,6 +54,30 @@
             color: white;
             font-weight: bold;
         }
+        #active-list {
+            display: flex;
+            gap: 10px;
+            padding: 10px 15px;
+            background: #111;
+            overflow-x: auto;
+            border-bottom: 1px solid #222;
+            max-height: 100px;
+            flex-wrap: wrap;
+            overflow-y: auto;
+        }
+        .active-item {
+            background: #222;
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 13px;
+            white-space: nowrap;
+            cursor: pointer;
+            border: 1px solid #333;
+            margin-bottom: 5px;
+        }
+        .active-item:hover {
+            background: #333;
+        }
         .container {
             flex: 1;
             position: relative;
@@ -86,6 +110,9 @@
         <input type="text" id="search-bar" placeholder="Search or enter URL" value="" inputmode="url" autocomplete="off" autocapitalize="none">
         <button id="go-btn">Go</button>
     </header>
+    <div id="active-list">
+        <!-- Active sites will appear here -->
+    </div>
     <div class="container" id="player-container" style="background: #000; display: flex; align-items: center; justify-content: center;">
         <!-- Native Player (Hidden initially) -->
         <video id="main-player" controls playsinline style="width: 100%; max-height: 100%; display: none; position: absolute; z-index: 10; background: black;"></video>
@@ -110,8 +137,80 @@
         const snifferFrame = document.getElementById('sniffer-frame');
         const searchBar = document.getElementById('search-bar');
         const goBtn = document.getElementById('go-btn');
+        const activeList = document.getElementById('active-list');
 
         let lastCapturedUrl = "";
+        let isListVisible = true;
+
+        // Create Toggle for Active List
+        const toggleBtn = document.createElement('div');
+        toggleBtn.innerText = "Toggle Active List";
+        toggleBtn.style = "position: absolute; top: 10px; right: 10px; z-index: 100; background: rgba(0,0,0,0.5); padding: 5px; border-radius: 5px; cursor: pointer; font-size: 10px; color: #777;";
+        toggleBtn.onclick = () => {
+            isListVisible = !isListVisible;
+            activeList.style.display = isListVisible ? 'flex' : 'none';
+        };
+        document.body.appendChild(toggleBtn);
+        
+        // IndexedDB setup for large storage
+        let db;
+        const dbName = "StreamPlayerDB";
+        const request = indexedDB.open(dbName, 1);
+
+        request.onerror = (event) => console.error("DB Error:", event);
+        request.onupgradeneeded = (event) => {
+            db = event.target.result;
+            const objectStore = db.createObjectStore("sites", { keyPath: "url" });
+            objectStore.createIndex("timestamp", "timestamp", { unique: false });
+        };
+        request.onsuccess = (event) => {
+            db = event.target.result;
+            loadSites();
+        };
+
+        function loadSites() {
+            if (!db) return;
+            const transaction = db.transaction(["sites"], "readonly");
+            const objectStore = transaction.objectStore("sites");
+            const index = objectStore.index("timestamp");
+            const request = index.openCursor(null, "prev");
+            
+            activeList.innerHTML = '';
+            let count = 0;
+            request.onsuccess = (event) => {
+                const cursor = event.target.result;
+                if (cursor && count < 1000) {
+                    const site = cursor.value;
+                    const el = document.createElement('div');
+                    el.className = 'active-item';
+                    el.innerText = site.name;
+                    el.title = site.url;
+                    el.onclick = () => {
+                        searchBar.value = site.url;
+                        startBrowsing(site.url);
+                    };
+                    activeList.appendChild(el);
+                    count++;
+                    cursor.continue();
+                }
+            };
+        }
+
+        function registerSite(url) {
+            if (!db || !url || url === 'about:blank') return;
+            try {
+                const urlObj = new URL(url);
+                // Filter out common ad/junk sites if needed, but for now we follow request
+                const name = urlObj.hostname.replace('www.', '');
+                const timestamp = Date.now();
+                
+                const transaction = db.transaction(["sites"], "readwrite");
+                const objectStore = transaction.objectStore("sites");
+                objectStore.put({ url, name, timestamp });
+                
+                transaction.oncomplete = () => loadSites();
+            } catch(e) {}
+        }
 
         function startBrowsing(url) {
             let target = url.trim();
@@ -120,6 +219,12 @@
             if (!target.startsWith('http')) {
                 target = 'https://' + target;
             }
+
+            registerSite(target);
+
+            // Hide list when browsing to give more space
+            activeList.style.display = 'none';
+            isListVisible = false;
 
             placeholder.style.display = 'block';
             statusText.innerText = "Browse & click a game...";
@@ -179,6 +284,9 @@
         window.addEventListener('message', (event) => {
             if (event.data && event.data.type === 'STREAM_FOUND') {
                 onStreamCaptured(event.data.url);
+            }
+            if (event.data && event.data.type === 'REGISTER_SITE') {
+                registerSite(event.data.url);
             }
         });
 
