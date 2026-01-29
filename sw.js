@@ -29,14 +29,21 @@ self.addEventListener('fetch', (event) => {
       return fetch(event.request).then(response => {
         const contentType = response.headers.get('content-type');
         
-        // Only modify HTML or if it's a known problematic site like cineby.gd
-        if (contentType?.includes('text/html') || url.hostname.includes('cineby.gd')) {
+        // Only modify HTML or known problematic sites
+        const isHtml = contentType?.includes('text/html');
+        const isProblematic = url.hostname.includes('cineby.gd') || url.hostname.includes('flickystream.ru');
+
+        if (isHtml || isProblematic) {
             const newHeaders = new Headers(response.headers);
             // Aggressively remove all frame-blocking headers
             newHeaders.delete('X-Frame-Options');
             newHeaders.delete('Content-Security-Policy');
             newHeaders.delete('Cross-Origin-Embedder-Policy');
             newHeaders.delete('Cross-Origin-Opener-Policy');
+            newHeaders.delete('X-Content-Type-Options');
+            
+            // Allow all origins
+            newHeaders.set('Access-Control-Allow-Origin', '*');
 
             return response.text().then(html => {
                 // Inject simple popup catcher
