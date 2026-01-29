@@ -62,7 +62,7 @@
             background: #111;
             overflow-x: auto;
             border-top: 1px solid #333;
-            max-height: 150px;
+            max-height: 200px;
             flex-wrap: wrap;
             overflow-y: auto;
             position: fixed;
@@ -71,6 +71,22 @@
             right: 0;
             z-index: 100;
             box-shadow: 0 -2px 10px rgba(0,0,0,0.5);
+        }
+        #fallback-btn {
+            position: fixed;
+            bottom: 220px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #ff3b30;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-weight: bold;
+            display: none;
+            z-index: 102;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            border: none;
+            cursor: pointer;
         }
         .active-item {
             background: #007aff;
@@ -119,6 +135,7 @@
     <div id="toggle-nav">Toggle Nav</div>
 
     <div class="container">
+        <button id="fallback-btn">Site Refused? Open Direct</button>
         <iframe id="browser-frame" sandbox="allow-scripts allow-same-origin allow-forms allow-presentation allow-popups allow-modals allow-storage-access-by-user-activation allow-top-navigation-by-user-activation" referrerpolicy="no-referrer"></iframe>
     </div>
 
@@ -132,8 +149,10 @@
         const goBtn = document.getElementById('go-btn');
         const activeList = document.getElementById('active-list');
         const toggleNav = document.getElementById('toggle-nav');
+        const fallbackBtn = document.getElementById('fallback-btn');
 
         let isNavVisible = true;
+        let currentTargetUrl = "";
 
         toggleNav.onclick = () => {
             isNavVisible = !isNavVisible;
@@ -207,16 +226,31 @@
                 target = 'https://' + target;
             }
             
+            currentTargetUrl = target;
             if (!target.includes('google.com/search')) {
                 registerSite(target);
             }
 
             browserFrame.src = target;
             
+            // Show fallback button after 3 seconds if it's not a Google search
+            fallbackBtn.style.display = 'none';
+            if (!target.includes('google.com/search')) {
+                setTimeout(() => {
+                    fallbackBtn.style.display = 'block';
+                }, 3000);
+            }
+
             // Auto-hide nav on navigation to give more space
             activeList.style.display = 'none';
             isNavVisible = false;
         }
+
+        fallbackBtn.onclick = () => {
+            if (currentTargetUrl) {
+                window.open(currentTargetUrl, '_blank');
+            }
+        };
 
         goBtn.onclick = () => navigateTo(searchBar.value);
         searchBar.onkeypress = (e) => { if (e.key === 'Enter') navigateTo(searchBar.value); };
