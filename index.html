@@ -197,9 +197,20 @@
         function navigateTo(url) {
             let target = url.trim();
             if (!target) return;
-            if (!target.startsWith('http')) target = 'https://' + target;
+
+            // Smart Search: If it doesn't look like a URL or domain, use Google
+            const isUrl = target.includes('.') && !target.includes(' ');
             
-            registerSite(target);
+            if (!isUrl) {
+                target = 'https://www.google.com/search?q=' + encodeURIComponent(target) + '&igu=1';
+            } else if (!target.startsWith('http')) {
+                target = 'https://' + target;
+            }
+            
+            if (!target.includes('google.com/search')) {
+                registerSite(target);
+            }
+
             browserFrame.src = target;
             
             // Auto-hide nav on navigation to give more space
